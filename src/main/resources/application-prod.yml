@@ -1,0 +1,55 @@
+# ============ PROD: secrets from env / Key Vault / Secrets Manager only ============
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:30}
+      minimum-idle: 5
+      connection-timeout: 5000
+      max-lifetime: 1800000
+  cache:
+    type: redis
+    redis:
+      time-to-live: 10m
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6380}
+      password: ${REDIS_PASSWORD}
+      ssl:
+        enabled: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI}
+
+management:
+  server:
+    port: 9091
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus      # minimal surface
+  endpoint:
+    health:
+      show-details: never
+      group:
+        readiness:
+          include: readinessState,db,redis
+
+telecom:
+  environment: prod
+  billing:
+    enabled: true
+    base-url: ${BILLING_URL}
+    timeout: 1s
+  features:
+    v2-api-enabled: false                     # dark-launch: enabled per release via config
+
+logging:
+  level:
+    root: WARN
+    com.telecom: INFO

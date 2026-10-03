@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <springProperty scope="context" name="appName" source="spring.application.name"/>
+    <springProperty scope="context" name="env" source="telecom.environment"/>
+
+    <!-- dev & qa: readable text -->
+    <springProfile name="dev | qa">
+        <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+        <root level="INFO"><appender-ref ref="CONSOLE"/></root>
+    </springProfile>
+
+    <!-- staging & prod: JSON to stdout, collected by Fluent Bit / Azure Monitor / CloudWatch agent -->
+    <springProfile name="staging | prod">
+        <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <customFields>{"service":"${appName}","env":"${env}"}</customFields>
+            </encoder>
+        </appender>
+        <appender name="ASYNC_JSON" class="ch.qos.logback.classic.AsyncAppender">
+            <queueSize>2048</queueSize>
+            <neverBlock>true</neverBlock>
+            <appender-ref ref="JSON"/>
+        </appender>
+        <root level="INFO"><appender-ref ref="ASYNC_JSON"/></root>
+    </springProfile>
+</configuration>

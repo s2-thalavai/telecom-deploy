@@ -1,0 +1,20 @@
+parameters:
+  - name: env
+    type: string
+
+steps:
+  - download: current
+    artifact: manifests
+  - task: KubernetesManifest@1
+    inputs:
+      action: bake
+      renderType: kustomize
+      kustomizationPath: $(Pipeline.Workspace)/manifests/overlays/${{ parameters.env }}
+    name: bake
+  - task: KubernetesManifest@1
+    inputs:
+      action: deploy
+      kubernetesServiceConnection: aks-${{ parameters.env }}
+      namespace: telecom-${{ parameters.env }}
+      manifests: $(bake.manifestsBundle)
+      containers: myregistry.azurecr.io/telecom-plans:$(version)

@@ -1,0 +1,71 @@
+// Declarative pipeline: build once, promote the same image qa -> staging -> prod.
+pipeline {
+    agent any
+    environment {
+        REGISTRY   = 'myregistry.azurecr.io'
+        IMAGE      = "${REGISTRY}/telecom-plans"
+        BASE_VER   = '1.4.0'
+        VERSION    = "${BASE_VER}-${env.BUILD_NUMBER}-${env.GIT_COMMIT.take(7)}"
+    }
+    options { timestamps(); disableConcurrentBuilds() }
+
+    stages {
+        stage('Build & Unit Test') {
+            steps {
+                sh "mvn -B clean verify -Drevision=${VERSION}"
+            }
+            post {
+                always { junit 'target/surefire-reports/*.xml' }
+            }
+        }
+        stage('Static Analysis') {
+            steps {
+                withSonarQubeEnv('sonar') { sh "mvn -B sonar:sonar -Drevision=${VERSION}" }
+            }
+        }
+        stage('Docker Build & Push') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'acr-creds', usernameVariable: 'U', passwordVariable: 'P')]) {
+                    sh """
+                      echo \$P | docker login ${REGISTRY} -u \$U --password-stdin
+                      docker build --build-arg APP_VERSION=${VERSION} -t ${IMAGE}:${VERSION} .
+                      docker push ${IMAGE}:${VERSION}
+                    """
+                }
+            }
+        }
+        stage('Deploy QA') {
+            steps { deployTo('qa') }
+        }
+        stage('Deploy Staging') {
+            when { branch 'main' }
+            steps { deployTo('staging') }
+        }
+        stage('Approve Prod') {
+            when { branch 'main' }
+            steps { input message: "Deploy ${VERSION} to PROD?", submitter: 'release-managers' }
+        }
+        stage('Deploy Prod') {
+            when { branch 'main' }
+            steps { deployTo('prod') }
+        }
+    }
+    post {
+        failure { echo "Build ${VERSION} failed" }   // hook Slack/Teams notification here
+    }
+}
+
+def deployTo(String envName) {
+    withKubeConfig([credentialsId: "kubeconfig-${envName}"]) {
+        sh """
+          cd k8s/overlays/${envName}
+          kustomize edit set image telecom-plans=${IMAGE}:${VERSION}
+          kustomize build . | kubectl apply -f -
+          if ! kubectl -n telecom-${envName} rollout status deployment/telecom-plans --timeout=300s; then
+            kubectl -n telecom-${envName} rollout undo deployment/telecom-plans
+            exit 1
+          fi
+        """
+        sh "scripts/smoke-test.sh https://plans-${envName}.example.com http://telecom-plans-mgmt.telecom-${envName}:9091 ${VERSION} ${envName}"
+    }
+}

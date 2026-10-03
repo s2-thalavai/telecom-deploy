@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+  - service-management.yaml
+  - external-secret.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - ingress.yaml
+# Generated ConfigMap gets a content hash suffix, so a config change triggers a rolling restart
+configMapGenerator:
+  - name: telecom-plans-config
+    literals:
+      - SPRING_PROFILES_ACTIVE=prod
+      - JAVA_OPTS=-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError

@@ -1,0 +1,46 @@
+# ============ DEV: developer laptop, in-memory everything ============
+spring:
+  datasource:
+    url: jdbc:h2:mem:plansdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    username: sa
+    password:
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed     # dev-only seed data
+  h2:
+    console:
+      enabled: true
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=500,expireAfterWrite=60s
+  data:
+    redis:
+      repositories:
+        enabled: false
+  jpa:
+    show-sql: true
+
+management:
+  health:
+    redis:
+      enabled: false                   # no Redis on a laptop
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+
+telecom:
+  environment: dev
+  features:
+    v2-api-enabled: true
+  security:
+    username: dev
+    password: dev123
+
+logging:
+  level:
+    com.telecom: DEBUG
+    org.hibernate.SQL: DEBUG

@@ -1,0 +1,61 @@
+stages: [build, test, package, deploy-qa, deploy-staging, deploy-prod]
+
+variables:
+  IMAGE: $CI_REGISTRY_IMAGE
+  VERSION: "1.4.0-$CI_PIPELINE_IID-$CI_COMMIT_SHORT_SHA"
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2"
+
+cache:
+  paths: [.m2/]
+
+build:
+  stage: build
+  image: maven:3.9-eclipse-temurin-17
+  script: mvn -B -DskipTests package -Drevision=$VERSION
+  artifacts: { paths: [target/*.jar], expire_in: 1 week }
+
+test:
+  stage: test
+  image: maven:3.9-eclipse-temurin-17
+  services: [docker:24-dind]            # Testcontainers
+  variables: { DOCKER_HOST: "tcp://docker:2375", TESTCONTAINERS_RYUK_DISABLED: "true" }
+  script: mvn -B verify -Drevision=$VERSION
+  artifacts:
+    reports: { junit: target/surefire-reports/*.xml }
+
+docker:
+  stage: package
+  image: docker:24
+  services: [docker:24-dind]
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build --build-arg APP_VERSION=$VERSION -t $IMAGE:$VERSION .
+    - docker push $IMAGE:$VERSION
+
+.deploy:
+  image: bitnami/kubectl:latest
+  script:
+    - cd k8s/overlays/$DEPLOY_ENV
+    - kubectl kustomize . | sed "s|myregistry.azurecr.io/telecom-plans:1.0.0-local|$IMAGE:$VERSION|" | kubectl apply -f -
+    - kubectl -n telecom-$DEPLOY_ENV rollout status deployment/telecom-plans --timeout=300s
+      || (kubectl -n telecom-$DEPLOY_ENV rollout undo deployment/telecom-plans && exit 1)
+
+deploy-qa:
+  extends: .deploy
+  stage: deploy-qa
+  variables: { DEPLOY_ENV: qa }
+  environment: { name: qa, url: https://plans-qa.example.com }
+
+deploy-staging:
+  extends: .deploy
+  stage: deploy-staging
+  variables: { DEPLOY_ENV: staging }
+  environment: { name: staging, url: https://plans-staging.example.com }
+  rules: [{ if: '$CI_COMMIT_BRANCH == "main"' }]
+
+deploy-prod:
+  extends: .deploy
+  stage: deploy-prod
+  variables: { DEPLOY_ENV: prod }
+  environment: { name: production, url: https://plans.example.com }
+  rules: [{ if: '$CI_COMMIT_BRANCH == "main"', when: manual }]   # manual approval gate

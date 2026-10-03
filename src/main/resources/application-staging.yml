@@ -1,0 +1,43 @@
+# ============ STAGING: production replica ============
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 20
+  cache:
+    type: redis
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      ssl:
+        enabled: ${REDIS_SSL:false}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI}
+
+management:
+  server:
+    port: 9091                          # internal-only port for probes & scraping
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,db,redis
+
+telecom:
+  environment: staging
+  billing:
+    enabled: true
+    base-url: ${BILLING_URL}
+  features:
+    v2-api-enabled: true
+
+logging:
+  level:
+    com.telecom: INFO

@@ -1,0 +1,36 @@
+# ============ QA: shared test environment, real Postgres, local cache ============
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://qa-postgres:5432/plans}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=1000,expireAfterWrite=5m
+  data:
+    redis:
+      repositories:
+        enabled: false
+
+management:
+  health:
+    redis:
+      enabled: false
+
+telecom:
+  environment: qa
+  billing:
+    enabled: true
+    base-url: ${BILLING_URL:http://billing-stub.qa.svc:8080}
+  features:
+    v2-api-enabled: true
+  security:
+    username: ${API_USERNAME:qa}
+    password: ${API_PASSWORD}
+
+logging:
+  level:
+    com.telecom: DEBUG
